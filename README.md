@@ -154,7 +154,7 @@ ad_banner_expiry_detector/
 
 ### 1️⃣ **Clone & Setup**
 ```bash
-git clone https://github.com/your-username/ad-banner-expiry-detector.git
+git clone https://github.com/RudraChouhan03/ad-banner-expiry-detector.git
 cd ad_banner_expiry_detector
 
 python -m venv venv
@@ -338,6 +338,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **⭐ Star this repo if it helped you! ⭐**
 
-[🐛 Report Bug](https://github.com/your-repo/issues) • [💡 Request Feature](https://github.com/your-repo/issues) • [💬 Discussions](https://github.com/your-repo/discussions)
+[🐛 Report Bug](https://github.com/RudraChouhan03/ad-banner-expiry-detector/issues) • [💡 Request Feature](https://github.com/RudraChouhan03/ad-banner-expiry-detector/issues) 
 
 </div>
