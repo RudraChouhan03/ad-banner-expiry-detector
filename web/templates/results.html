@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banner Detection Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .zoomable-image {
+            cursor: zoom-in;
+            transition: transform 0.3s ease;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .zoomable-image:hover {
+            transform: scale(1.05);
+        }
+
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+        }
+
+        .modal-content {
+            position: relative;
+            margin: 5% auto;
+            width: 90%;
+            max-width: 1200px;
+            text-align: center;
+        }
+
+        .modal-image {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            cursor: move;
+        }
+
+        .zoom-controls-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        .language-analysis {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .language-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+        }
+        
+        .processing-time {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Banner Detection Results</h1>
+            <p>Advanced GPS extraction and Hindi text processing</p>
+        </header>
+        
+        <div class="results-container">
+            <!-- Processing Summary -->
+            <div class="summary-card">
+                <h2>📊 Processing Summary</h2>
+                <div class="summary-stats">
+                    <div class="stat">
+                        <span class="stat-value">{{ result.banners|length }}</span>
+                        <span class="stat-label">Banners Processed</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">{{ result.banners|selectattr('match_result.matched', 'equalto', true)|list|length }}</span>
+                        <span class="stat-label">Matches Found</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">{{ "%.1f"|format(result.processing_time) }}s</span>
+                        <span class="stat-label">Processing Time</span>
+                    </div>
+                </div>
+                
+                <!-- Language Statistics -->
+                {% if result.language_stats %}
+                <div class="language-analysis">
+                    <h3>🌐 Language Analysis</h3>
+                    <div class="language-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">{{ result.language_stats.hindi_banners }}</div>
+                            <div class="stat-label">Hindi Banners</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">{{ result.language_stats.english_banners }}</div>
+                            <div class="stat-label">English Banners</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">{{ result.language_stats.mixed_banners }}</div>
+                            <div class="stat-label">Mixed Script</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- GPS Information -->
+            <div class="info-card">
+                <h2>📍 GPS Information</h2>
+                {% if result.gps_coordinates %}
+                <div class="gps-info found">
+                    <p><strong>✅ GPS Coordinates Found</strong></p>
+                    <p><strong>Latitude:</strong> {{ "%.6f"|format(result.gps_coordinates.latitude) }}</p>
+                    <p><strong>Longitude:</strong> {{ "%.6f"|format(result.gps_coordinates.longitude) }}</p>
+                    {% if result.gps_coordinates.raw_text %}
+                    <p><strong>Raw GPS Text:</strong> {{ result.gps_coordinates.raw_text[:100] }}{% if result.gps_coordinates.raw_text|length > 100 %}...{% endif %}</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="gps-info not-found">
+                    <p><strong>⚠️ GPS Coordinates Not Found</strong></p>
+                    <p>Location-based filtering is not available for this image.</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Original Image -->
+            <div class="image-card">
+                <h2>📸 Original Image</h2>
+                <div class="original-image">
+                    <img src="{{ url_for('uploaded_file', filename=filename) }}" 
+                         alt="Original Image" 
+                         onclick="openImageModal(this)">
+                </div>
+            </div>
+            
+            <!-- Banner Results -->
+            <div class="banners-section">
+                <h2>🎯 Banner Analysis Results</h2>
+                
+                {% if result.banners %}
+                    {% for banner in result.banners %}
+                    <div class="banner-card">
+                        <div class="banner-header">
+                            <h3>🏷️ Banner {{ loop.index }}</h3>
+                            <div class="banner-badges">
+                                {% if banner.crop_source == 'manual' %}
+                                <span class="badge manual">Manual Crop</span>
+                                {% else %}
+                                <span class="badge auto">Auto Detected</span>
+                                {% endif %}
+                                
+                                {% if banner.ocr_result.content_category %}
+                                <span class="language-tag {{ banner.ocr_result.content_category }}">
+                                    {{ banner.ocr_result.content_category|replace('_', ' ')|title }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="banner-content">
+                            <!-- Banner Image -->
+                            {% if banner.crop_path %}
+                            <div class="crop-image">
+                                <img src="{{ url_for('static', filename=banner.crop_path) if banner.crop_path.startswith('uploads/') else url_for('uploaded_file', filename=banner.crop_path) }}" 
+                                     alt="Banner Crop" 
+                                     onclick="openImageModal(this)">
+                            </div>
+                            {% endif %}
+                            
+                            <!-- OCR Results -->
+                            <div class="ocr-results">
+                                <h4>🔤 Text Extraction Results</h4>
+                                
+                                {% if banner.ocr_result.original_text %}
+                                <div class="text-result">
+                                    <strong>Original Text:</strong>
+                                    <p class="extracted-text">{{ banner.ocr_result.original_text }}</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if banner.ocr_result.translated_text and banner.ocr_result.translated_text != banner.ocr_result.original_text %}
+                                <div class="text-result">
+                                    <strong>Processed Text:</strong>
+                                    <p class="processed-text">{{ banner.ocr_result.translated_text }}</p>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Enhanced Language Analysis -->
+                                {% if banner.ocr_result.language_analysis %}
+                                <div class="language-analysis">
+                                    <h4>🌐 Language Analysis</h4>
+                                    {% if banner.ocr_result.language_analysis.language_info %}
+                                    <div class="language-breakdown">
+                                        <p><strong>Content Category:</strong> 
+                                            <span class="language-tag {{ banner.ocr_result.content_category }}">
+                                                {{ banner.ocr_result.content_category|replace('_', ' ')|title }}
+                                            </span>
+                                        </p>
+                                        <p><strong>Hindi Content:</strong> {{ "%.1f"|format(banner.ocr_result.language_analysis.language_info.hindi_percentage) }}%</p>
+                                        <p><strong>English Content:</strong> {{ "%.1f"|format(banner.ocr_result.language_analysis.language_info.english_percentage) }}%</p>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if banner.ocr_result.language_analysis.keywords %}
+                                    <div class="keywords">
+                                        <strong>Keywords:</strong>
+                                        <div class="keyword-tags">
+                                            {% for keyword in banner.ocr_result.language_analysis.keywords[:10] %}
+                                            <span class="keyword-tag">{{ keyword }}</span>
+                                            {% endfor %}
+                                            {% if banner.ocr_result.language_analysis.keywords|length > 10 %}
+                                            <span class="keyword-tag more">+{{ banner.ocr_result.language_analysis.keywords|length - 10 }} more</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="ocr-meta">
+                                    <p><strong>Confidence:</strong> {{ "%.1f"|format(banner.ocr_result.confidence) }}%</p>
+                                    {% if banner.ocr_result.engines_used %}
+                                    <p><strong>OCR Engines:</strong> {{ banner.ocr_result.engines_used|join(', ') }}</p>
+                                    {% endif %}
+                                    <p><strong>Processing Time:</strong> {{ "%.2f"|format(banner.ocr_result.processing_time) }}s</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Match Results -->
+                            <div class="match-results">
+                                <h4>🔍 Database Match Results</h4>
+                                
+                                {% if banner.match_result.matched %}
+                                <div class="match-found">
+                                    <div class="match-header">
+                                        <span class="match-status success">✅ MATCH FOUND</span>
+                                        <span class="match-score">{{ "%.1f"|format(banner.match_result.match_score) }}% Match</span>
+                                    </div>
+                                    
+                                    <div class="company-info">
+                                        <h5>🏢 Company Information</h5>
+                                        <p><strong>Company:</strong> {{ banner.match_result.banner_data.company_name }}</p>
+                                        {% if banner.match_result.banner_data.banner_text %}
+                                        <p><strong>Registered Text:</strong> {{ banner.match_result.banner_data.banner_text }}</p>
+                                        {% endif %}
+                                        {% if banner.match_result.banner_data.location %}
+                                        <p><strong>Location:</strong> {{ banner.match_result.banner_data.location }}</p>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="expiry-info">
+                                        <h5>📅 Expiry Status</h5>
+                                        {% if banner.match_result.is_expired %}
+                                        <div class="status expired">
+                                            <span class="status-icon">⚠️</span>
+                                            <span class="status-text">{{ banner.match_result.status_message }}</span>
+                                        </div>
+                                        {% else %}
+                                        <div class="status valid">
+                                            <span class="status-icon">✅</span>
+                                            <span class="status-text">{{ banner.match_result.status_message }}</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if banner.match_result.banner_data.expiry_date %}
+                                        <p><strong>Expiry Date:</strong> {{ banner.match_result.banner_data.expiry_date }}</p>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Enhanced Matching Details -->
+                                    {% if banner.match_result.match_details %}
+                                    <div class="matching-details">
+                                        <h5>🔧 Matching Details</h5>
+                                        {% if banner.match_result.method_used %}
+                                        <p><strong>Method Used:</strong> 
+                                            <span class="matching-method">{{ banner.match_result.method_used|replace('_', ' ')|title }}</span>
+                                        </p>
+                                        {% endif %}
+                                        {% if banner.match_result.threshold_used %}
+                                        <p><strong>Threshold:</strong> {{ "%.1f"|format(banner.match_result.threshold_used) }}%</p>
+                                        {% endif %}
+                                        {% if banner.match_result.content_category %}
+                                        <p><strong>Content Category:</strong> {{ banner.match_result.content_category|replace('_', ' ')|title }}</p>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <div class="match-not-found">
+                                    <div class="match-header">
+                                        <span class="match-status failed">❌ NO MATCH FOUND</span>
+                                        {% if banner.match_result.best_score %}
+                                        <span class="match-score">Best: {{ "%.1f"|format(banner.match_result.best_score) }}%</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="no-match-details">
+                                        <p>{{ banner.match_result.message }}</p>
+                                        {% if banner.match_result.threshold_used %}
+                                        <p><strong>Required Threshold:</strong> {{ "%.1f"|format(banner.match_result.threshold_used) }}%</p>
+                                        {% endif %}
+                                        {% if banner.match_result.match_details %}
+                                            {% if banner.match_result.match_details.methods_tried %}
+                                            <p><strong>Methods Tried:</strong> {{ banner.match_result.match_details.methods_tried|length }} different approaches</p>
+                                            {% endif %}
+                                            {% if banner.match_result.match_details.nearby_count %}
+                                            <p><strong>Banners Checked:</strong> {{ banner.match_result.match_details.nearby_count }} nearby registrations</p>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="no-banners">
+                    <p>❌ No banners were successfully processed from this image.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">🔄 Process Another Image</a>
+            <button onclick="printResults()" class="btn btn-secondary">🖨️ Print Results</button>
+            <button onclick="downloadResults()" class="btn btn-secondary">💾 Download Report</button>
+        </div>
+    </div>
+    
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal" onclick="closeImageModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close" onclick="closeImageModal()">&times;</span>
+            <img id="modalImage" src="" alt="Enlarged view">
+        </div>
+    </div>
+    
+    <script>
+        function openImageModal(img) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'block';
+            modalImg.src = img.src;
+        }
+        
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+        
+        function printResults() {
+            window.print();
+        }
+        
+        function downloadResults() {
+            // Create a downloadable report
+            const results = {
+                filename: '{{ filename }}',
+                processing_time: {{ result.processing_time }},
+                gps_found: {{ 'true' if result.gps_coordinates else 'false' }},
+                banners_processed: {{ result.banners|length }},
+                matches_found: {{ result.banners|selectattr('match_result.matched', 'equalto', true)|list|length }},
+                language_stats: {{ result.language_stats|tojson if result.language_stats else '{}' }},
+                timestamp: new Date().toISOString()
+            };
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(results, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "banner_detection_results.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeImageModal();
+            }
+        });
+    </script>
+</body>
+</html>

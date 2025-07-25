@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Banner Cropping</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .crop-interface {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .image-viewport {
+            position: relative;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 1200px;
+            height: 600px;
+            margin: 0 auto;
+            background: #f5f5f5;
+            cursor: grab;
+        }
+        
+        .image-viewport:active {
+            cursor: grabbing;
+        }
+        
+        .image-container {
+            position: relative;
+            transition: transform 0.1s ease-out;
+            transform-origin: 0 0;
+        }
+        
+        .source-image {
+            display: block;
+            user-select: none;
+        }
+        
+        .crop-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+        
+        .zoom-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .zoom-info {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.9rem;
+            z-index: 10;
+        }
+        
+        .crop-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .help-text {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .crops-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .crop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✂️ Manual Banner Cropping</h1>
+            <p>Click and drag to select banner regions</p>
+        </header>
+
+        <div class="help-text">
+            <strong>🎯 Controls:</strong>
+            Mouse Wheel: Zoom In/Out | Drag: Pan Image | Click & Drag on Image: Create Crop | Double-click: Reset Zoom
+        </div>
+
+        <div class="crop-interface">
+            <!-- Zoom Controls -->
+            <div class="zoom-controls">
+                <button id="zoomOut" class="btn btn-secondary">🔍 Zoom Out</button>
+                <button id="fitToScreen" class="btn btn-primary">📱 Fit to Screen</button>
+                <button id="zoomIn" class="btn btn-secondary">🔍 Zoom In</button>
+                <button id="resetView" class="btn btn-secondary">🔄 Reset View</button>
+            </div>
+
+            <!-- Image Viewport -->
+            <div class="image-viewport" id="imageViewport">
+                <div class="zoom-info" id="zoomInfo">100%</div>
+                <div class="image-container" id="imageContainer">
+                    <img id="sourceImage" class="source-image" src="{{ url_for('uploaded_file', filename=filename) }}" alt="Source Image">
+                    <canvas id="cropCanvas" class="crop-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Crop Controls -->
+            <div class="crop-controls">
+                <button id="clearCrops" class="btn btn-secondary">🗑️ Clear All Crops</button>
+                <button id="processCrops" class="btn btn-success">🚀 Process with Crops</button>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">❌ Cancel</a>
+            </div>
+
+            <!-- Crops Summary -->
+            <div class="crops-summary">
+                <h3>Selected Crop Regions: <span id="cropCount">0</span></h3>
+                <div id="cropsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class CropInterface {
+            constructor() {
+                this.crops = [];
+                this.isDrawing = false;
+                this.isPanning = false;
+                this.startX = 0;
+                this.startY = 0;
+                this.currentCrop = null;
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.lastPanX = 0;
+                this.lastPanY = 0;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.fitImageToScreen(); // Automatically fit image on load
+            }
+            
+            initializeElements() {
+                this.viewport = document.getElementById('imageViewport');
+                this.container = document.getElementById('imageContainer');
+                this.image = document.getElementById('sourceImage');
+                this.canvas = document.getElementById('cropCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.zoomInfo = document.getElementById('zoomInfo');
+                
+                // Wait for image to load before initializing
+                this.image.onload = () => {
+                    this.initializeCanvas();
+                    this.fitImageToScreen();
+                };
+                
+                // If image is already loaded
+                if (this.image.complete) {
+                    this.initializeCanvas();
+                    this.fitImageToScreen();
+                }
+            }
+            
+            initializeCanvas() {
+                this.canvas.width = this.image.naturalWidth;
+                this.canvas.height = this.image.naturalHeight;
+                this.image.style.width = this.image.naturalWidth + 'px';
+                this.image.style.height = this.image.naturalHeight + 'px';
+            }
+            
+            setupEventListeners() {
+                // Mouse wheel for zooming
+                this.viewport.addEventListener('wheel', (e) => this.handleWheel(e));
+                
+                // Mouse events for drawing and panning
+                this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+                this.canvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
+                
+                // Viewport panning
+                this.viewport.addEventListener('mousedown', (e) => this.handlePanStart(e));
+                this.viewport.addEventListener('mousemove', (e) => this.handlePanMove(e));
+                this.viewport.addEventListener('mouseup', (e) => this.handlePanEnd(e));
+                this.viewport.addEventListener('mouseleave', (e) => this.handlePanEnd(e));
+                
+                // Double-click to reset
+                this.viewport.addEventListener('dblclick', () => this.fitImageToScreen());
+                
+                // Button controls
+                document.getElementById('zoomIn').addEventListener('click', () => this.zoom(1.2));
+                document.getElementById('zoomOut').addEventListener('click', () => this.zoom(0.8));
+                document.getElementById('fitToScreen').addEventListener('click', () => this.fitImageToScreen());
+                document.getElementById('resetView').addEventListener('click', () => this.resetView());
+                document.getElementById('clearCrops').addEventListener('click', () => this.clearCrops());
+                document.getElementById('processCrops').addEventListener('click', () => this.processCrops());
+            }
+            
+            fitImageToScreen() {
+                const viewportRect = this.viewport.getBoundingClientRect();
+                const imageAspect = this.image.naturalWidth / this.image.naturalHeight;
+                const viewportAspect = viewportRect.width / viewportRect.height;
+                
+                let newScale;
+                if (imageAspect > viewportAspect) {
+                    // Image is wider than viewport
+                    newScale = (viewportRect.width - 40) / this.image.naturalWidth;
+                } else {
+                    // Image is taller than viewport
+                    newScale = (viewportRect.height - 40) / this.image.naturalHeight;
+                }
+                
+                // Ensure minimum readable scale
+                newScale = Math.max(newScale, 0.1);
+                newScale = Math.min(newScale, 2);
+                
+                this.scale = newScale;
+                this.centerImage();
+                this.updateTransform();
+            }
+            
+            centerImage() {
+                const viewportRect = this.viewport.getBoundingClientRect();
+                const scaledWidth = this.image.naturalWidth * this.scale;
+                const scaledHeight = this.image.naturalHeight * this.scale;
+                
+                this.translateX = Math.max(0, (viewportRect.width - scaledWidth) / 2);
+                this.translateY = Math.max(0, (viewportRect.height - scaledHeight) / 2);
+            }
+            
+            resetView() {
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.updateTransform();
+            }
+            
+            handleWheel(e) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                
+                // Get mouse position relative to image
+                const rect = this.viewport.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                this.zoomAtPoint(delta, mouseX, mouseY);
+            }
+            
+            zoomAtPoint(factor, mouseX, mouseY) {
+                const oldScale = this.scale;
+                this.scale = Math.max(0.1, Math.min(5, this.scale * factor));
+                
+                if (this.scale !== oldScale) {
+                    // Adjust translation to zoom toward mouse position
+                    const scaleDiff = this.scale - oldScale;
+                    this.translateX -= (mouseX - this.translateX) * (scaleDiff / oldScale);
+                    this.translateY -= (mouseY - this.translateY) * (scaleDiff / oldScale);
+                    
+                    this.updateTransform();
+                }
+            }
+            
+            zoom(factor) {
+                const viewportRect = this.viewport.getBoundingClientRect();
+                const centerX = viewportRect.width / 2;
+                const centerY = viewportRect.height / 2;
+                this.zoomAtPoint(factor, centerX, centerY);
+            }
+            
+            updateTransform() {
+                this.container.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+                this.zoomInfo.textContent = Math.round(this.scale * 100) + '%';
+            }
+            
+            handlePanStart(e) {
+                if (e.target === this.canvas) return; // Don't pan when drawing
+                this.isPanning = true;
+                this.lastPanX = e.clientX;
+                this.lastPanY = e.clientY;
+                this.viewport.style.cursor = 'grabbing';
+            }
+            
+            handlePanMove(e) {
+                if (!this.isPanning) return;
+                
+                const deltaX = e.clientX - this.lastPanX;
+                const deltaY = e.clientY - this.lastPanY;
+                
+                this.translateX += deltaX;
+                this.translateY += deltaY;
+                
+                this.lastPanX = e.clientX;
+                this.lastPanY = e.clientY;
+                
+                this.updateTransform();
+            }
+            
+            handlePanEnd(e) {
+                this.isPanning = false;
+                this.viewport.style.cursor = 'grab';
+            }
+            
+            getImageCoordinates(clientX, clientY) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = (clientX - rect.left) / this.scale;
+                const y = (clientY - rect.top) / this.scale;
+                return { x, y };
+            }
+            
+            handleMouseDown(e) {
+                e.preventDefault();
+                if (this.isPanning) return;
+                
+                this.isDrawing = true;
+                const coords = this.getImageCoordinates(e.clientX, e.clientY);
+                this.startX = coords.x;
+                this.startY = coords.y;
+                this.canvas.style.cursor = 'crosshair';
+            }
+            
+            handleMouseMove(e) {
+                if (!this.isDrawing) return;
+                
+                const coords = this.getImageCoordinates(e.clientX, e.clientY);
+                this.drawCurrentCrop(this.startX, this.startY, coords.x, coords.y);
+            }
+            
+            handleMouseUp(e) {
+                if (!this.isDrawing) return;
+                
+                this.isDrawing = false;
+                this.canvas.style.cursor = 'crosshair';
+                
+                const coords = this.getImageCoordinates(e.clientX, e.clientY);
+                this.finalizeCrop(this.startX, this.startY, coords.x, coords.y);
+            }
+            
+            drawCurrentCrop(x1, y1, x2, y2) {
+                this.redrawCanvas();
+                
+                // Draw current crop in progress
+                this.ctx.strokeStyle = '#ff0000';
+                this.ctx.lineWidth = 2 / this.scale;
+                this.ctx.setLineDash([5 / this.scale, 5 / this.scale]);
+                this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                this.ctx.setLineDash([]);
+            }
+            
+            finalizeCrop(x1, y1, x2, y2) {
+                const width = Math.abs(x2 - x1);
+                const height = Math.abs(y2 - y1);
+                
+                // Only add crop if it's large enough
+                if (width > 20 && height > 20) {
+                    const crop = {
+                        x1: Math.min(x1, x2),
+                        y1: Math.min(y1, y2),
+                        x2: Math.max(x1, x2),
+                        y2: Math.max(y1, y2)
+                    };
+                    
+                    this.crops.push(crop);
+                    this.updateCropsList();
+                    this.redrawCanvas();
+                }
+            }
+            
+            redrawCanvas() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw all existing crops
+                this.crops.forEach((crop, index) => {
+                    this.ctx.strokeStyle = '#00ff00';
+                    this.ctx.lineWidth = 2 / this.scale;
+                    this.ctx.strokeRect(crop.x1, crop.y1, crop.x2 - crop.x1, crop.y2 - crop.y1);
+                    
+                    // Add crop number
+                    this.ctx.fillStyle = '#00ff00';
+                    this.ctx.font = `${16 / this.scale}px Arial`;
+                    this.ctx.fillText(index + 1, crop.x1 + 5, crop.y1 + 20);
+                });
+            }
+            
+            updateCropsList() {
+                document.getElementById('cropCount').textContent = this.crops.length;
+                
+                const list = document.getElementById('cropsList');
+                list.innerHTML = '';
+                
+                this.crops.forEach((crop, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'crop-item';
+                    item.innerHTML = `
+                        <span>Crop ${index + 1}: ${Math.round(crop.x1)}, ${Math.round(crop.y1)} → ${Math.round(crop.x2)}, ${Math.round(crop.y2)}</span>
+                        <button onclick="cropInterface.removeCrop(${index})" class="btn btn-small btn-secondary">Remove</button>
+                    `;
+                    list.appendChild(item);
+                });
+            }
+            
+            removeCrop(index) {
+                this.crops.splice(index, 1);
+                this.updateCropsList();
+                this.redrawCanvas();
+            }
+            
+            clearCrops() {
+                this.crops = [];
+                this.updateCropsList();
+                this.redrawCanvas();
+            }
+            
+            processCrops() {
+                if (this.crops.length === 0) {
+                    alert('Please create at least one crop region before processing.');
+                    return;
+                }
+                
+                // Send crops to server
+                fetch('/api/manual_crop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: '{{ filename }}',
+                        crops: this.crops
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '{{ url_for("process_image", filename=filename) }}?manual_crops=true';
+                    } else {
+                        alert('Error creating crops: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error processing crops');
+                });
+            }
+        }
+        
+        // Initialize the crop interface when page loads
+        let cropInterface;
+        window.addEventListener('load', () => {
+            cropInterface = new CropInterface();
+        });
+    </script>
+</body>
+</html>

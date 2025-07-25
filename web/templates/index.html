@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ad Banner Detection System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .system-status {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .status-item {
+            text-align: center;
+            padding: 0.5rem;
+        }
+        
+        .status-enabled {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .status-disabled {
+            color: #FF9800;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Ad Banner Detection System</h1>
+            <p>Advanced GPS extraction and Hindi text processing for banner expiry detection</p>
+        </header>
+        
+        <!-- System Status -->
+        <div class="system-status">
+            <div class="status-item">
+                <div>🇮🇳 Hindi Support</div>
+                <div class="{{ 'status-enabled' if hindi_support else 'status-disabled' }}">
+                    {{ '✅ Enabled' if hindi_support else '❌ Disabled' }}
+                </div>
+            </div>
+            <div class="status-item">
+                <div>📍 GPS Optimization</div>
+                <div class="{{ 'status-enabled' if gps_optimization else 'status-disabled' }}">
+                    {{ '✅ Enabled' if gps_optimization else '❌ Disabled' }}
+                </div>
+            </div>
+            <div class="status-item">
+                <div>⚡ CPU Optimized</div>
+                <div class="status-enabled">✅ Enabled</div>
+            </div>
+            <div class="status-item">
+                <div>🧠 Smart Caching</div>
+                <div class="status-enabled">✅ Enabled</div>
+            </div>
+        </div>
+        
+        <!-- Features -->
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🗺️</div>
+                <h3>Enhanced GPS Extraction</h3>
+                <p>Improved reliability with multiple region scanning, pattern caching, and fallback methods for consistent GPS coordinate detection.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🇮🇳</div>
+                <h3>Hindi Text Processing</h3>
+                <p>Full Devanagari script support with multi-engine OCR, text normalization, and specialized matching algorithms for Hindi content.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>Smart Banner Detection</h3>
+                <p>AI-powered banner detection with YOLO and OpenCV fallback, optimized for CPU processing without GPU requirements.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>Intelligent Matching</h3>
+                <p>Advanced text matching with fuzzy algorithms, content-aware thresholds, and multi-language support for accurate banner identification.</p>
+            </div>
+        </div>
+        
+        <!-- Upload Form -->
+        <div class="upload-form">
+            <h2>📤 Upload Banner Image</h2>
+            <p>Upload an image containing advertisement banners for analysis</p>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file">Select Image File:</label>
+                    <input type="file" 
+                           id="file" 
+                           name="file" 
+                           class="form-control" 
+                           accept=".jpg,.jpeg,.png"
+                           required>
+                    <small>Supported formats: JPG, JPEG, PNG (Max: 8MB)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="manual_crop" value="on">
+                        Enable manual cropping (allows you to manually select banner regions)
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    🚀 Process Image
+                </button>
+            </form>
+        </div>
+        
+        <!-- Process Information -->
+        <div class="card">
+            <h2>🔄 Processing Steps</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📍</div>
+                    <h4>GPS Extraction</h4>
+                    <p>Extract location coordinates from camera overlay with enhanced reliability</p>
+                </div>
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+                    <h4>Banner Detection</h4>
+                    <p>Automatically detect advertisement banners using AI-powered computer vision</p>
+                </div>
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📝</div>
+                    <h4>Text Extraction</h4>
+                    <p>Extract text from banners with Hindi and English support using multiple OCR engines</p>
+                </div>
+                <div style="text-align: center; padding: 1rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+                    <h4>Database Matching</h4>
+                    <p>Match extracted text with registered banners and check expiry status</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Technical Specifications -->
+        <div class="card">
+            <h2>⚙️ Technical Specifications</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                <div>
+                    <h4>🔤 OCR Engines</h4>
+                    <ul>
+                        <li>Tesseract (Hindi + English)</li>
+                        <li>EasyOCR (Multi-language)</li>
+                        <li>PaddleOCR (Backup engine)</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>🎯 Detection Methods</h4>
+                    <ul>
+                        <li>YOLOv8 Neural Network</li>
+                        <li>OpenCV Contour Detection</li>
+                        <li>Manual Cropping Interface</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>🔍 Matching Algorithms</h4>
+                    <ul>
+                        <li>Fuzzy String Matching</li>
+                        <li>Hindi Text Similarity</li>
+                        <li>Keyword-based Matching</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>⚡ Optimizations</h4>
+                    <ul>
+                        <li>CPU-only Processing</li>
+                        <li>Smart Caching System</li>
+                        <li>Pattern Learning</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API Access -->
+        <div class="card">
+            <h2>🔗 API Access</h2>
+            <p>Access system statistics and controls programmatically:</p>
+            <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; font-family: monospace;">
+                <div><strong>System Stats:</strong> GET /api/system_stats</div>
+                <div><strong>Clear Cache:</strong> POST /api/clear_cache</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // File upload validation
+        document.getElementById('file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileSize = file.size / 1024 / 1024; // MB
+                if (fileSize > 8) {
+                    alert('File size too large. Maximum size is 8MB.');
+                    e.target.value = '';
+                    return;
+                }
+                
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Invalid file type. Please upload JPG, JPEG, or PNG files.');
+                    e.target.value = '';
+                    return;
+                }
+                
+                console.log(`File selected: ${file.name} (${fileSize.toFixed(2)} MB)`);
+            }
+        });
+        
+        // Form submission handler
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const fileInput = document.getElementById('file');
+            if (!fileInput.files.length) {
+                e.preventDefault();
+                alert('Please select an image file to upload.');
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<span class="loading"></span> Processing...';
+            submitBtn.disabled = true;
+        });
+        
+        // System status checker
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/system_stats');
+                const stats = await response.json();
+                console.log('System Status:', stats);
+            } catch (error) {
+                console.log('Could not fetch system status');
+            }
+        }
+        
+        // Check status on page load
+        checkSystemStatus();
+    </script>
+</body>
+</html>
